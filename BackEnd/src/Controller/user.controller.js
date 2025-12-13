@@ -138,8 +138,8 @@ exports.forgetPassword = async (req, res) => {
         const { email } = req.body;
         if (!email) {
             return res.status(400).json({
-                success: false,
-                message: 'Email is required'
+                error: true,
+                msg: 'Email is required'
             });
         }
 
@@ -147,12 +147,33 @@ exports.forgetPassword = async (req, res) => {
         if (!user) {
             console.log('❌ User not found');
             return res.status(404).json({
-                success: false,
-                message: 'Email not found in our database'
+                error: true,
+                msg: 'Email not found in our database'
             });
         }
 
         console.log('✅ User found:', user.email);
+
+        // ----- OTP attempt limiting (max 3 sends in a window) -----
+        const now = new Date();
+        let otpAttempts = user.otpAttempts || 0;
+        let otpAttemptsExpiry = user.otpAttemptsExpiry;
+
+        // If no window set or window expired, reset counter and start new window
+        if (!otpAttemptsExpiry || otpAttemptsExpiry < now) {
+            otpAttempts = 0;
+            otpAttemptsExpiry = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutes window
+        }
+
+        if (otpAttempts >= 3) {
+            return res.status(429).json({
+                error: true,
+                msg: 'Maximum OTP attempts reached. Please try again later.'
+            });
+        }
+
+        // Increment attempt count for this send
+        otpAttempts += 1;
 
         // Generate OTP
         const OTP = Math.floor(100000 + Math.random() * 900000);
@@ -161,14 +182,16 @@ exports.forgetPassword = async (req, res) => {
         console.log('🔢 Generated OTP:', OTP);
         console.log('⏰ OTP Expiry:', otpExpiry);
 
-        // Method 1: Direct update with console logging
+        // Method 1: Direct update with console logging (also save attempts info)
         const result = await User.updateOne(
             { email: email },
             {
                 $set: {
                     resetOtp: OTP,
                     otpExpiry: otpExpiry,
-                    updatedAt: new Date()
+                    otpAttempts: otpAttempts,
+                    otpAttemptsExpiry: otpAttemptsExpiry,
+                    updatedAt: now
                 }
             }
         );
@@ -216,24 +239,26 @@ exports.forgetPassword = async (req, res) => {
 
         if (emailSent) {
             console.log('✅ Email sent successfully');
-            res.status(200).json({
+            return res.status(200).json({
+                error: false,
                 success: true,
-                message: 'OTP sent to your email'
+                msg: 'OTP sent to your email'
             });
         } else {
             console.log('⚠️ Email not sent, but OTP generated');
-            res.status(200).json({
+            return res.status(200).json({
+                error: false,
                 success: true,
-                message: 'OTP generated',
+                msg: 'OTP generated',
                 otp: OTP // For testing
             });
         }
 
     } catch (error) {
         console.error('❌ Error in forgot password:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Internal server error'
+        return res.status(500).json({
+            error: true,
+            msg: 'Internal server error'
         });
     }
 };
@@ -246,32 +271,32 @@ exports.verifyOtp = async (req, res) => {
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(400).json({
-                success: false,
-                message: 'User not found'
+                error: true,
+                msg: 'User not found'
             });
         }
 
         // Check if OTP exists
         if (!user.resetOtp) {
             return res.status(400).json({
-                success: false,
-                message: 'No OTP requested'
+                error: true,
+                msg: 'No OTP requested'
             });
         }
 
         // Check OTP expiry
         if (user.otpExpiry < new Date()) {
             return res.status(400).json({
-                success: false,
-                message: 'OTP expired'
+                error: true,
+                msg: 'OTP expired'
             });
         }
 
         // Verify OTP (direct comparison)
         if (user.resetOtp != OTP) {
             return res.status(400).json({
-                success: false,
-                message: 'Invalid OTP'
+                error: true,
+                msg: 'Invalid OTP'
             });
         }
 
@@ -281,15 +306,16 @@ exports.verifyOtp = async (req, res) => {
         await user.save();
 
         return res.status(200).json({
+            error: false,
             success: true,
-            message: 'OTP verified successfully'
+            msg: 'OTP verified successfully'
         });
 
     } catch (error) {
         console.error('Error:', error);
         return res.status(500).json({
-            success: false,
-            message: 'Server error'
+            error: true,
+            msg: 'Server error'
         });
     }
 };
@@ -302,8 +328,8 @@ exports.changePassword = async (req, res) => {
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(400).json({
-                success: false,
-                message: 'User not found'
+                error: true,
+                msg: 'User not found'
             });
         }
 
@@ -313,16 +339,17 @@ exports.changePassword = async (req, res) => {
         user.updatedAt = new Date();
         await user.save();
 
-        res.status(200).json({
+        return res.status(200).json({
+            error: false,
             success: true,
-            message: 'Password changed successfully'
+            msg: 'Password changed successfully'
         });
 
     } catch (error) {
         console.error('Error changing password:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error changing password'
+        return res.status(500).json({
+            error: true,
+            msg: 'Error changing password'
         });
     }
 };

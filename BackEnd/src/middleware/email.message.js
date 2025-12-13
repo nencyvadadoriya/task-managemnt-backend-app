@@ -7,9 +7,6 @@ console.log('Email Password:', process.env.USER_PASS_KEY ? '✅ Set' : '❌ Miss
 
 // Create transporter with correct environment variables
 const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,       // SSL ke liye 465, TLS ke liye 587
-    secure: true,
     service: 'gmail',
     auth: {
         user: process.env.USER_EMAIL,  // Changed from EMAIL_USER
