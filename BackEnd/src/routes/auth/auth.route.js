@@ -6,7 +6,10 @@ const {
     verifyOtp,
     changePassword,
     getAllUsers,
-    currentUser
+    currentUser,
+    createUser,
+    deleteUser,
+    updateUser
 } = require('../../Controller/user.controller');
 const authMiddleware = require('../../middleware/auth.middleware');
 
@@ -18,6 +21,11 @@ router.post('/forgetPassword', forgetPassword);
 router.post('/verifyOtp', verifyOtp);
 router.post('/change-password', changePassword);
 router.get('/getAllUsers', getAllUsers);
-router.get('/currentUser',authMiddleware,currentUser);
+router.get('/currentUser', authMiddleware, currentUser);
+
+// Admin Routes
+router.post('/createUser', authMiddleware, createUser);
+router.delete('/deleteUser/:id', authMiddleware, deleteUser);
+router.put('/updateUser/:id', authMiddleware, updateUser);
 
 module.exports = router;
