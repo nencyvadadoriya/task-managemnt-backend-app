@@ -146,8 +146,10 @@ exports.forgetPassword = async (req, res) => {
         const user = await User.findOne({ email });
         if (!user) {
             console.log('❌ User not found');
-            return res.status(404).json({
+            // Normalize to 200 so frontend me network error na aaye, bas JSON se error handle ho
+            return res.status(200).json({
                 error: true,
+                success: false,
                 msg: 'Email not found in our database'
             });
         }
@@ -166,8 +168,9 @@ exports.forgetPassword = async (req, res) => {
         }
 
         if (otpAttempts >= 3) {
-            return res.status(429).json({
+            return res.status(200).json({
                 error: true,
+                success: false,
                 msg: 'Maximum OTP attempts reached. Please try again later.'
             });
         }
