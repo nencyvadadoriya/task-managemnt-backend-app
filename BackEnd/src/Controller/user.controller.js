@@ -136,6 +136,7 @@ exports.loginUser = async (req, res) => {
 exports.forgetPassword = async (req, res) => {
     try {
         const { email } = req.body;
+        
         if (!email) {
             return res.status(400).json({
                 error: true,
@@ -143,125 +144,89 @@ exports.forgetPassword = async (req, res) => {
             });
         }
 
+        console.log(`📧 Forget password request for: ${email}`);
+
         const user = await User.findOne({ email });
         if (!user) {
-            console.log('❌ User not found');
-            // Normalize to 200 so frontend me network error na aaye, bas JSON se error handle ho
-            return res.status(200).json({
+            console.log(`❌ User not found: ${email}`);
+            return res.status(404).json({
                 error: true,
-                success: false,
                 msg: 'Email not found in our database'
             });
         }
 
-        console.log('✅ User found:', user.email);
-
-        // ----- OTP attempt limiting (max 3 sends in a window) -----
-        const now = new Date();
-        let otpAttempts = user.otpAttempts || 0;
-        let otpAttemptsExpiry = user.otpAttemptsExpiry;
-
-        // If no window set or window expired, reset counter and start new window
-        if (!otpAttemptsExpiry || otpAttemptsExpiry < now) {
-            otpAttempts = 0;
-            otpAttemptsExpiry = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutes window
-        }
-
-        if (otpAttempts >= 3) {
-            return res.status(200).json({
-                error: true,
-                success: false,
-                msg: 'Maximum OTP attempts reached. Please try again later.'
-            });
-        }
-
-        // Increment attempt count for this send
-        otpAttempts += 1;
+        console.log(`✅ User found: ${user.email} (${user.name})`);
 
         // Generate OTP
         const OTP = Math.floor(100000 + Math.random() * 900000);
         const otpExpiry = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
 
-        console.log('🔢 Generated OTP:', OTP);
-        console.log('⏰ OTP Expiry:', otpExpiry);
+        console.log(`🔢 Generated OTP: ${OTP} (expires: ${otpExpiry.toLocaleTimeString()})`);
 
-        // Method 1: Direct update with console logging (also save attempts info)
-        const result = await User.updateOne(
-            { email: email },
-            {
-                $set: {
-                    resetOtp: OTP,
-                    otpExpiry: otpExpiry,
-                    otpAttempts: otpAttempts,
-                    otpAttemptsExpiry: otpAttemptsExpiry,
-                    updatedAt: now
-                }
-            }
-        );
+        // Save OTP to database
+        user.resetOtp = OTP;
+        user.otpExpiry = otpExpiry;
+        user.updatedAt = new Date();
+        
+        await user.save();
+        console.log('✅ OTP saved to database');
 
-        console.log('📝 Update Result:', {
-            matched: result.matchedCount,
-            modified: result.modifiedCount,
-            upserted: result.upsertedCount
-        });
-
-        // Verify the update
-        const updatedUser = await User.findOne({ email });
-        console.log('🔍 After Update - resetOtp:', updatedUser.resetOtp);
-        console.log('🔍 After Update - otpExpiry:', updatedUser.otpExpiry);
-
-        if (!updatedUser.resetOtp) {
-            console.log('⚠️ OTP not saved! Trying alternative method...');
-
-            // Alternative method
-            await User.findOneAndUpdate(
-                { email: email },
-                {
-                    resetOtp: OTP,
-                    otpExpiry: otpExpiry
-                },
-                {
-                    new: true,
-                    runValidators: false,
-                    setDefaultsOnInsert: true
-                }
-            );
-
-            // Verify again
-            const recheckUser = await User.findOne({ email });
-            console.log('🔍 Recheck - resetOtp:', recheckUser.resetOtp);
-        }
-
-        // Try to send email
+        // Attempt to send email
         let emailSent = false;
+        let emailError = null;
+
         try {
+            console.log('📤 Calling sendOtpEmail function...');
             emailSent = await sendOtpEmail(email, OTP, user.name);
-        } catch (emailError) {
-            console.log('📧 Email error:', emailError.message);
+            
+            if (emailSent) {
+                console.log('✅ Email sent successfully via nodemailer');
+            } else {
+                emailError = 'Email service returned false';
+                console.log('❌ Email service returned false');
+            }
+        } catch (err) {
+            emailError = err.message;
+            console.error('❌ Exception in sendOtpEmail:', err.message);
         }
 
+        // Determine response based on email status
         if (emailSent) {
-            console.log('✅ Email sent successfully');
             return res.status(200).json({
                 error: false,
                 success: true,
-                msg: 'OTP sent to your email'
+                msg: 'OTP has been sent to your email address',
+                email: email,
+                timestamp: new Date().toISOString()
             });
         } else {
-            console.log('⚠️ Email not sent, but OTP generated');
+            console.log('⚠️ Email not sent. Returning OTP in response for debugging');
+            
+            // In production, you might not want to return OTP
+            // But for now, return it for debugging
             return res.status(200).json({
                 error: false,
                 success: true,
-                msg: 'OTP generated',
-                otp: OTP // For testing
+                msg: 'OTP generated (email service issue)',
+                otp: OTP,
+                email: email,
+                expiresAt: otpExpiry.toISOString(),
+                note: 'Check backend logs for email service issues',
+                debug: {
+                    emailService: emailSent ? 'working' : 'failed',
+                    error: emailError
+                }
             });
         }
 
     } catch (error) {
-        console.error('❌ Error in forgot password:', error);
+        console.error('❌ Error in forgetPassword:', error);
+        console.error('Stack:', error.stack);
+        
         return res.status(500).json({
             error: true,
-            msg: 'Internal server error'
+            msg: 'Internal server error',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
