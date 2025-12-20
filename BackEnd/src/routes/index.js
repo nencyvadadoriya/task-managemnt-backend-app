@@ -1,3 +1,5 @@
+const app = require("../../server"); // ya correct path
+module.exports = app;
 const express = require('express')
 const route = express.Router();
 

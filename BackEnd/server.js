@@ -10,10 +10,4 @@ app.use(express.urlencoded({ extended: true }));
 
 
 app.use('/api', require('./src/routes/index'))
-app.listen(PORT,(error)=>{ 
-    if(error){
-        console.log("server not started")
-        return false;
-    }
-        console.log("server is starting")
-})
+module.exports = app; 
