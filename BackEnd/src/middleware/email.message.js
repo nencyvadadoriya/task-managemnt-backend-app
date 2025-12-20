@@ -2,15 +2,16 @@ const nodemailer = require('nodemailer');
 require('dotenv').config(); // Add this line
 
 console.log('🔧 Email Configuration:');
-console.log('Email User:', process.env.USER_EMAIL);
-console.log('Email Password:', process.env.USER_PASS_KEY ? '✅ Set' : '❌ Missing');
+console.log('Email User:', process.env.USER_EMAIL || process.env.EMAIL_USER);
+console.log('Email Password:', (process.env.USER_PASS_KEY || process.env.EMAIL_PASSWORD) ? '✅ Set' : '❌ Missing');
 
-// Create transporter with correct environment variables
+// Create transporter with support for both old and new env variable names
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: process.env.USER_EMAIL,  // Changed from EMAIL_USER
-        pass: process.env.USER_PASS_KEY  // Changed from EMAIL_PASSWORD
+        // Prefer new variable names but fall back to older ones if needed
+        user: process.env.USER_EMAIL || process.env.EMAIL_USER,
+        pass: process.env.USER_PASS_KEY || process.env.EMAIL_PASSWORD
     },
     tls: {
         rejectUnauthorized: false
