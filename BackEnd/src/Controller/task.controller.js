@@ -21,14 +21,16 @@ exports.addTask = async (req, res) => {
         const {
             title,
             description,
-            assignedTo, 
+            assignedTo,
             dueDate,
             priority = 'medium',
             taskType = 'regular',
             companyName = 'company name',
             brand = '',
+            brandId = null,
             status = 'pending'
         } = req.body;
+
         let assignedBy = req.body.assignedBy;
         if (!assignedBy) {
             if (req.user && req.user.email) {
@@ -67,6 +69,7 @@ exports.addTask = async (req, res) => {
             taskType,
             companyName,
             brand,
+            brandId: brandId || null,
             status
         });
 
@@ -605,5 +608,54 @@ exports.deleteTaskComment = async (req, res) => {
             message: 'Error deleting comment',
             error: error.message
         });
+    }
+};
+
+exports.inviteToTask = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const { email, role, message } = req.body;
+        const invitedBy = req.user.email;
+
+        // Validation
+        if (!email) {
+            return res.status(400).json({ success: false, message: 'Email is required' });
+        }
+
+        const task = await Task.findById(taskId);
+        if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+
+        // Add to invitations
+        task.invitations.push({
+            email,
+            role: role || 'viewer',
+            status: 'pending',
+            invitedBy,
+            invitedAt: new Date()
+        });
+
+        // Create history entry
+        const historyEntry = await TaskHistory.create({
+            taskId,
+            action: 'collaborator_invited',
+            description: `Invited ${email} as ${role || 'viewer'}`,
+            userId: req.user.id || req.user._id,
+            user: {
+                userId: req.user.id || req.user._id,
+                userName: req.user.name,
+                userEmail: req.user.email,
+                userRole: req.user.role
+            },
+            note: message || ''
+        });
+
+        task.history.push(historyEntry._id);
+
+        await task.save();
+
+        res.json({ success: true, message: 'User invited successfully', data: task });
+    } catch (error) {
+        console.error('Error inviting to task:', error);
+        res.status(500).json({ success: false, message: 'Error inviting user', error: error.message });
     }
 };

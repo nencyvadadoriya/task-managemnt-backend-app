@@ -10,6 +10,26 @@ const taskSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  taskType: {
+    type: String,
+    default: 'regular',
+    trim: true
+  },
+  companyName: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  brand: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  brandId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Brand',
+    default: null
+  },
   status: {
     type: String,
     enum: ['pending', 'in-progress', 'completed'],
@@ -47,11 +67,18 @@ const taskSchema = new mongoose.Schema({
     default: []
   }],
   // Store history references
-  // ✅ Store history references
+  // Store history references
   history: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'TaskHistory',
     default: []
+  }],
+  invitations: [{
+    email: { type: String, required: true },
+    role: { type: String, default: 'viewer' },
+    status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },
+    invitedBy: { type: String },
+    invitedAt: { type: Date, default: Date.now }
   }]
 }, {
   timestamps: true,
@@ -64,9 +91,11 @@ taskSchema.index({ dueDate: 1 });
 taskSchema.index({ assignedTo: 1 });
 taskSchema.index({ assignedBy: 1 });
 taskSchema.index({ completedApproval: 1 });
+taskSchema.index({ brandId: 1 });
+taskSchema.index({ brand: 1 });
 
 // Virtual for comment count
-taskSchema.virtual('commentCount').get(function() {
+taskSchema.virtual('commentCount').get(function () {
   return this.comments?.length || 0;
 });
 

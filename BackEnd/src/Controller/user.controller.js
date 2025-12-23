@@ -136,7 +136,7 @@ exports.loginUser = async (req, res) => {
 exports.forgetPassword = async (req, res) => {
     try {
         const { email } = req.body;
-        
+
         if (!email) {
             return res.status(400).json({
                 error: true,
@@ -167,7 +167,7 @@ exports.forgetPassword = async (req, res) => {
         user.resetOtp = OTP;
         user.otpExpiry = otpExpiry;
         user.updatedAt = new Date();
-        
+
         await user.save();
         console.log('✅ OTP saved to database');
 
@@ -178,7 +178,7 @@ exports.forgetPassword = async (req, res) => {
         try {
             console.log('📤 Calling sendOtpEmail function...');
             emailSent = await sendOtpEmail(email, OTP, user.name);
-            
+
             if (emailSent) {
                 console.log('✅ Email sent successfully via nodemailer');
             } else {
@@ -200,20 +200,15 @@ exports.forgetPassword = async (req, res) => {
                 timestamp: new Date().toISOString()
             });
         } else {
-            console.log('⚠️ Email not sent. Returning OTP in response for debugging');
-            
-            // In production, you might not want to return OTP
-            // But for now, return it for debugging
-            return res.status(200).json({
-                error: false,
-                success: true,
-                msg: 'OTP generated (email service issue)',
-                otp: OTP,
+            console.log('⚠️ Email not sent. Returning error.');
+
+            return res.status(500).json({
+                error: true,
+                success: false,
+                msg: 'Failed to send OTP email. Please check server configuration (Environment Variables).',
                 email: email,
-                expiresAt: otpExpiry.toISOString(),
-                note: 'Check backend logs for email service issues',
                 debug: {
-                    emailService: emailSent ? 'working' : 'failed',
+                    emailService: 'failed',
                     error: emailError
                 }
             });
@@ -222,7 +217,7 @@ exports.forgetPassword = async (req, res) => {
     } catch (error) {
         console.error('❌ Error in forgetPassword:', error);
         console.error('Stack:', error.stack);
-        
+
         return res.status(500).json({
             error: true,
             msg: 'Internal server error',
